@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="PDFとOpenAI APIキーで使える、LabPayの論文査読ツール。章別要約から改稿まで。">
+  <title>Paper Review — 論文査読</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="result-view.css">
+  <script src="prompts.js" defer></script>
+  <script src="models.js" defer></script>
+  <script src="review-api.js" defer></script>
+  <script src="result-view.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+  <aside class="sidebar no-print">
+    <a class="brand" href="#new" aria-label="Paper Review ホーム"><span class="brand-mark">P<span>r</span></span><span>Paper Review<small>LABPAY · STANDALONE</small></span></a>
+    <p class="nav-label">WORKSPACE</p>
+    <nav aria-label="メインナビゲーション">
+      <button class="nav-item active" data-nav="new"><span aria-hidden="true">＋</span>新しい査読</button>
+      <button class="nav-item" data-nav="history"><span aria-hidden="true">≡</span>査読履歴 <span class="count" id="history-count">0</span></button>
+    </nav>
+    <div class="sidebar-bottom"><span class="status-dot"></span>あなたのブラウザで動作<p>結果とPDFはこの端末に保存。<br>APIキーは保存しません。</p><a href="README.md" target="_blank" rel="noopener">使い方・機能について ↗</a></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar no-print"><span>研究ツール <span class="crumb">/</span> 論文査読</span><span class="local-badge"><span class="status-dot"></span> PERSONAL WORKSPACE</span></header>
+    <main id="main">
+      <div id="notice" class="notice no-print" role="status" hidden></div>
+      <section id="new-view" class="view">
+        <div class="page-heading"><div><p class="eyebrow">READ. REVIEW. REFINE.</p><h1>論文の次の一歩を、見つけよう。</h1><p class="subtitle">章ごとの理解から、具体的な改稿へ。LabPayの査読機能を、ひとつの画面に。</p></div><span class="edition">01 / NEW REVIEW</span></div>
+        <form id="review-form">
+          <div class="form-layout">
+            <div class="form-main">
+              <section class="panel">
+                <div class="section-title"><span class="step">01</span><div><h2>論文を追加</h2><p>図表や数式を含むPDFを、そのまま読み込みます。</p></div><span class="required">必須</span></div>
+                <label class="dropzone" id="paper-drop" for="paper-file"><span class="document-icon" aria-hidden="true">≡</span><strong id="paper-label">PDFをここにドロップ</strong><span id="paper-meta">またはクリックしてファイルを選択</span><span class="file-limit">PDF · 最大30 MB</span></label>
+                <input id="paper-file" class="visually-hidden file-input" type="file" accept="application/pdf,.pdf" aria-label="論文PDF">
+                <button type="button" id="clear-paper" class="text-button" hidden>論文PDFを取り消す</button>
+                <div class="field-row"><label class="field">投稿先の会議・ジャーナル <span class="optional">任意</span><input id="venue" maxlength="200" placeholder="例：CHI、UIST、IEEE VR"><span class="field-help">空欄の場合はHCI系の国際会議を想定します。</span></label><label class="field">査読の厳しさ<select id="strictness"><option>緩め</option><option selected>やや厳しめ</option><option>厳しめ</option></select><span class="field-help">元のシステムと同じ3段階。</span></label></div>
+              </section>
+              <section class="panel">
+                <div class="section-title"><span class="step">02</span><div><h2>回答文・リバトル</h2><p>査読への返答がある場合は、一緒に評価できます。</p></div><span class="optional">任意</span></div>
+                <label class="field" for="response-text">著者の回答文<textarea id="response-text" rows="5" maxlength="20000" placeholder="査読コメントに対する回答文を貼り付けてください。指摘への対応、論文との矛盾、説得力を評価します。"></textarea></label>
+                <div class="attachment-row"><label class="button secondary small" for="response-file">＋ 回答PDFを添付</label><input id="response-file" type="file" class="visually-hidden file-input" accept="application/pdf,.pdf" aria-label="回答文PDF"><span id="response-file-label" class="muted">PDFとテキストは併用できます</span><button type="button" id="clear-response" class="text-button" hidden>取り消す</button></div>
+                <p class="field-help">回答PDFも最大30 MB。2つのPDFの合計は50 MB未満。</p>
+              </section>
+              <details class="panel advanced"><summary><span>査読プロンプトをカスタマイズ</span><span class="optional">詳細設定</span></summary><p class="muted">LabPayの既定プロンプトを全文移植しています。空欄なら既定の評価基準を使います。</p><label class="field">独自のシステムプロンプト<textarea id="custom-prompt" rows="9" maxlength="30000" placeholder="空欄で既定の査読プロンプトを使用"></textarea></label><div class="button-row"><button type="button" id="show-default" class="button secondary small">既定の全文を入れる</button><button type="button" id="reset-prompt" class="text-button">既定に戻す</button><button type="button" id="save-settings" class="button secondary small">設定を保存</button></div></details>
+            </div>
+            <aside class="form-aside">
+              <section class="panel api-panel"><div class="section-title"><span class="step">03</span><div><h2>AIの設定</h2></div></div><label class="field" for="api-key">OpenAI APIキー<span class="key-input"><input id="api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="sk-…"><button type="button" id="toggle-key" aria-label="APIキーを表示" aria-pressed="false">表示</button></span></label><div class="key-status"><span class="status-dot" id="key-dot"></span><span id="key-status">キーはこの画面内だけで保持</span><button type="button" id="clear-key" class="text-button">消去</button></div><label class="field">査読モデル<select id="model"><option value="gpt-5">GPT-5（元の既定モデル）</option><option value="o1">o1</option><option value="custom">モデル名を指定</option></select></label><label class="field" id="custom-model-field" hidden>モデルID<input id="custom-model" placeholder="PDF入力対応のモデルID" maxlength="100"></label><label class="field">思考量<select id="reasoning-effort" aria-describedby="reasoning-help"><option value="">モデルの既定</option></select><span id="reasoning-help" class="field-help" aria-live="polite">モデルに対応する思考量を選べます。</span></label><p class="api-note">PDFと回答文をOpenAIに送信します。API利用料は入力したキーのアカウントに発生します。</p><button id="start-review" class="button primary start-button" type="submit">査読を開始 <span aria-hidden="true">↗</span></button><p class="small-note">数分かかることがあります。<br>処理中はこのページを開いたままにしてください。</p></section>
+              <section class="coverage"><p class="eyebrow">WHAT YOU GET</p><h3>読む、確かめる、書き直す。</h3><ul><li>章別の日本語要約</li><li>採否判定・学生向けまとめ</li><li>貢献・論理・統計・引用の評価</li><li>具体的な書き換え案</li><li>修正TODO・結果への追加質問</li></ul></section>
+            </aside>
+          </div>
+        </form>
+      </section>
+      <section id="progress-panel" class="panel progress-panel no-print" role="status" aria-live="polite" hidden><div class="progress-top"><span class="spinner" aria-hidden="true"></span><div><h2 id="progress-title">査読の準備中</h2><p id="progress-message">PDFを確認しています。</p></div><span id="elapsed">0:00</span></div><ol class="progress-steps"><li data-stage="upload">PDFの送信</li><li data-stage="review">要約・査読</li><li data-stage="save">結果の保存</li></ol><div class="progress-footer"><span>中止しても、開始済みのAPI処理に料金が発生する場合があります。</span><button id="cancel-review" type="button" class="button secondary small">処理を中止</button></div></section>
+      <section id="history-view" class="view" hidden><div class="page-heading"><div><p class="eyebrow">YOUR RESEARCH, IN PROGRESS.</p><h1>査読履歴</h1><p class="subtitle">保存した査読と、改稿の進捗を振り返る。</p></div><label class="button secondary" for="import-file">結果JSONを読み込む</label></div><input type="file" id="import-file" accept=".json,application/json" class="visually-hidden file-input" aria-label="査読結果JSONの読み込み"><div id="history-list"></div></section>
+      <section id="result-view" class="view" hidden><div class="page-heading result-heading"><div><p class="eyebrow">REVIEW REPORT</p><h1 id="result-title">査読結果</h1><p id="result-meta" class="subtitle"></p></div><button type="button" class="button secondary no-print" data-nav="new">＋ 新しい査読</button></div><div class="result-toolbar no-print"><div class="button-row"><button type="button" class="button secondary small" id="open-paper">元PDFを開く ↗</button><button type="button" class="button secondary small" id="open-response">回答PDFを開く ↗</button></div><div class="button-row"><button type="button" class="button secondary small" id="copy-result">コピー</button><button type="button" class="button secondary small" id="export-markdown">Markdown</button><button type="button" class="button secondary small" id="export-json">JSON</button><button type="button" class="button secondary small" id="print-result">印刷 / PDF</button></div></div><div class="result-tabs no-print" role="tablist" aria-label="査読結果の表示"><button id="tab-report" type="button" role="tab" aria-controls="report-panel" aria-selected="true" data-tab="report">査読レポート</button><button id="tab-checklist" type="button" role="tab" aria-controls="checklist-panel" aria-selected="false" tabindex="-1" data-tab="checklist">修正TODO <span id="todo-count"></span></button><button id="tab-chat" type="button" role="tab" aria-controls="chat-panel" aria-selected="false" tabindex="-1" data-tab="chat">AIに相談</button></div><div id="report-panel" role="tabpanel" aria-labelledby="tab-report" tabindex="0"></div><div id="checklist-panel" role="tabpanel" aria-labelledby="tab-checklist" tabindex="0" hidden></div><div id="chat-panel" class="panel" role="tabpanel" aria-labelledby="tab-chat" tabindex="0" hidden><h2>この査読について、もう少し。</h2><p class="muted">章別要約と査読結果を踏まえて回答します。元PDFは追加送信しません。</p><div id="chat-log" role="log" aria-live="polite"></div><form id="chat-form"><label class="field" for="chat-input">追加で聞きたいこと<textarea id="chat-input" rows="3" maxlength="12000" placeholder="例：優先度の高い修正を3つに絞り、具体的な進め方を教えてください。" required></textarea></label><div class="chat-footer"><span class="field-help">同じAPIキーと査読モデルを使用します。質問ごとにAPI利用料が発生します。</span><div class="button-row"><button type="button" id="cancel-chat" class="button secondary small" hidden>中止</button><button type="submit" id="send-chat" class="button primary">質問する ↗</button></div></div></form></div></section>
+      <footer class="page-footer no-print"><span>Paper Review <span class="muted">/ LabPayの査読機能から</span></span><span>ブラウザだけで。あなたのペースで。</span></footer>
+    </main>
+  </div>
+</body>
+</html>
